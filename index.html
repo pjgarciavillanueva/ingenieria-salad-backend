@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Point Salad - Industrial Edition Online</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Cliente Socket.io -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    .card-flip { transition: transform 0.2s ease; }
+    .card-flip:active { transform: scale(0.96); }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans flex flex-col justify-between select-none">
+
+  <!-- MODAL INICIAL: CREAR / UNIRSE A SALA -->
+  <div id="lobby-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-6">
+      <div class="text-center space-y-1">
+        <span class="text-4xl">⚙️</span>
+        <h2 class="text-2xl font-bold text-amber-400">Ingeniería Salad Online</h2>
+        <p class="text-xs text-slate-400">Juego de cartas multijugador en tiempo real</p>
+      </div>
+
+      <!-- Formulario Nombre -->
+      <div>
+        <label class="text-xs font-semibold text-slate-300 block mb-1">Tu Nombre / Apodo:</label>
+        <input type="text" id="player-name-input" placeholder="Ej: Ingeniero 1" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-amber-300 focus:outline-none focus:border-amber-500">
+      </div>
+
+      <!-- Opciones Crear vs Unirse -->
+      <div class="grid grid-cols-2 gap-3 pt-2">
+        <button onclick="showCreateOptions()" class="bg-amber-500 hover:bg-amber-400 text-slate-900 font-extrabold py-3 rounded-xl shadow-lg transition text-xs flex flex-col items-center gap-1">
+          <span class="text-lg">👑</span>
+          <span>Crear Sala</span>
+        </button>
+        <button onclick="showJoinOptions()" class="bg-slate-700 hover:bg-slate-600 text-slate-100 font-extrabold py-3 rounded-xl shadow-lg transition text-xs flex flex-col items-center gap-1">
+          <span class="text-lg">🔑</span>
+          <span>Unirse a Sala</span>
+        </button>
+      </div>
+
+      <!-- Sub-panel Crear Sala -->
+      <div id="create-panel" class="hidden space-y-4 pt-3 border-t border-slate-700">
+        <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 flex items-center justify-between">
+          <div>
+            <span class="text-xs font-medium text-slate-200 block">Jugar con toda la baraja</span>
+            <span class="text-[10px] text-slate-400 block">108 cartas (sin filtrar por nº de jugadores)</span>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="full-deck-checkbox" class="sr-only peer">
+            <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+          </label>
+        </div>
+        <button onclick="createRoom()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl transition text-sm">
+          Confirmar y Crear 🚀
+        </button>
+      </div>
+
+      <!-- Sub-panel Unirse a Sala -->
+      <div id="join-panel" class="hidden space-y-3 pt-3 border-t border-slate-700">
+        <div>
+          <label class="text-xs font-semibold text-slate-300 block mb-1">Código de Sala (4 letras):</label>
+          <input type="text" id="room-code-input" placeholder="Ej: XJ9K" maxlength="4" class="w-full uppercase tracking-widest text-center bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-base font-mono font-bold text-amber-400 focus:outline-none focus:border-amber-500">
+        </div>
+        <button onclick="joinRoom()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl transition text-sm">
+          Unirse a la Partida 🔗
+        </button>
+      </div>
+
+      <!-- Esperando Jugadores (Lobby) -->
+      <div id="waiting-panel" class="hidden space-y-4 pt-3 border-t border-slate-700 text-center">
+        <div class="bg-slate-900/80 p-3 rounded-xl border border-amber-500/40">
+          <span class="text-[10px] text-slate-400 uppercase tracking-widest block">Código de la Sala</span>
+          <span id="display-room-code" class="text-3xl font-black font-mono text-amber-400">----</span>
+          <p class="text-[10px] text-slate-400 mt-1">Comparte este código con tus amigos para que entren desde sus móviles.</p>
+        </div>
+
+        <div>
+          <span class="text-xs font-semibold text-slate-300 block mb-2">Jugadores Conectados:</span>
+          <div id="connected-players-list" class="space-y-1.5">
+            <!-- Lista dinámica -->
+          </div>
+        </div>
+
+        <button id="start-game-btn" onclick="startGame()" class="hidden w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg transition text-sm">
+          ¡Iniciar Partida! 🚀
+        </button>
+        <p id="waiting-host-msg" class="text-xs text-amber-300/80 italic">Esperando a que el creador de la sala inicie la partida...</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL FIN DE PARTIDA -->
+  <div id="game-over-modal" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 max-w-2xl w-full max-h-[90vh] flex flex-col justify-between shadow-2xl">
+      <div class="text-center pb-3 border-b border-slate-700/80">
+        <span class="text-4xl">🏆</span>
+        <h2 class="text-2xl font-black text-amber-400">¡Partida Finalizada!</h2>
+        <p class="text-xs text-slate-400">Resumen General y Clasificación Final</p>
+      </div>
+
+      <div class="overflow-y-auto my-3 pr-1 space-y-4 flex-1">
+        <div>
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Clasificación Final</h3>
+          <div id="final-leaderboard" class="space-y-2"></div>
+        </div>
+        <div>
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Resumen Detallado por Jugador</h3>
+          <div id="final-details-accordion" class="space-y-3"></div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-700/80">
+        <button onclick="location.reload()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg transition text-base">
+          Volver al Menú Principal 🚀
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header / Barra de Estado -->
+  <header class="bg-slate-800 border-b border-slate-700 p-3 shadow-lg flex justify-between items-center gap-2">
+    <div class="flex items-center gap-2">
+      <span class="text-xl">⚙️</span>
+      <div>
+        <h1 class="font-bold text-base text-amber-400 leading-none">Ingeniería Salad</h1>
+        <span id="room-badge" class="text-[10px] text-slate-400 font-mono">Sala: ----</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-3 bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-700/50">
+      <div>
+        <span class="text-[10px] text-slate-400 block">Turno</span>
+        <span id="turn-indicator" class="font-bold text-emerald-400 text-xs">Esperando...</span>
+      </div>
+      <div class="h-6 w-[1px] bg-slate-700"></div>
+      <div>
+        <span class="text-[10px] text-slate-400 block">Estado</span>
+        <span id="action-status" class="font-medium text-amber-300 text-xs">Conectando</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Contenido Principal -->
+  <main class="container mx-auto p-3 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- Tablero Central: Mercado -->
+    <section class="lg:col-span-8 flex flex-col gap-4">
+      <!-- Pilas de Robo -->
+      <div>
+        <h2 class="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-2 flex items-center gap-1.5">
+          <span>📚</span> Mazos de Puntuación (1 carta/turno)
+        </h2>
+        <div id="deck-piles" class="grid grid-cols-3 gap-3"></div>
+      </div>
+
+      <!-- Mercado de Elementos -->
+      <div>
+        <h2 class="text-xs font-semibold tracking-wider text-slate-400 uppercase mb-2 flex items-center gap-1.5">
+          <span>🏭</span> Mercado de Componentes (2 cartas/turno)
+        </h2>
+        <div id="element-market" class="grid grid-cols-2 md:grid-cols-3 gap-3"></div>
+      </div>
+    </section>
+
+    <!-- Zona de Jugador / Marcador -->
+    <section class="lg:col-span-4 bg-slate-800/80 rounded-xl p-3 border border-slate-700 flex flex-col justify-between">
+      <div>
+        <div class="border-b border-slate-700 pb-2 mb-3 flex justify-between items-center">
+          <div>
+            <h2 id="player-inventory-title" class="text-base font-bold text-amber-400">Inventario</h2>
+            <div id="player-selector-tabs" class="flex gap-1 mt-1"></div>
+          </div>
+          <span id="player-score-display" class="text-2xl font-black text-emerald-400">0 pts</span>
+        </div>
+
+        <div class="mb-4">
+          <h3 class="text-[10px] font-semibold text-slate-400 uppercase mb-1.5">Componentes en Propiedad</h3>
+          <div id="player-elements-grid" class="grid grid-cols-3 gap-1.5"></div>
+        </div>
+
+        <div>
+          <h3 class="text-[10px] font-semibold text-slate-400 uppercase mb-1.5 flex justify-between items-center">
+            <span>Objetivos de Puntuación</span>
+            <span class="text-[9px] text-slate-500">(Voltear 1/turno)</span>
+          </h3>
+          <div id="player-scores-list" class="space-y-1.5 max-h-52 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // ⚠️ REEMPLAZA ESTA URL CON TU SERVIDOR DE RENDER:
+    const SERVER_URL = "https://ingenieria-salad-backend.onrender.com";
+
+
+    const socket = io(SERVER_URL);
+
+    const PALOS = {
+      BH:  { id: 'BH',  nombre: 'BOMBA HYD',   icono: '⚙️', color: 'bg-blue-600 border-blue-400' },
+      RS:  { id: 'RS',  nombre: 'REDUCTOR',    icono: '🌀', color: 'bg-amber-600 border-amber-400' },
+      CP:  { id: 'CP',  nombre: 'CILINDRO',    icono: '🚀', color: 'bg-cyan-600 border-cyan-400' },
+      RO:  { id: 'RO',  nombre: 'RODAMIENTO',  icono: '🔘', color: 'bg-slate-600 border-slate-400' },
+      PLC: { id: 'PLC', nombre: 'PLC',         icono: '💻', color: 'bg-emerald-600 border-emerald-400' },
+      EV:  { id: 'EV',  nombre: 'ELECTROVALV', icono: '⚡', color: 'bg-purple-600 border-purple-400' }
+    };
+
+    let currentRoom = null;
+    let myPlayerIndex = -1;
+    let viewingPlayerIndex = 0;
+
+    // --- SOCKET EVENTS ---
+    socket.on('connect', () => {
+      console.log('Conectado al servidor WebSocket');
+    });
+
+    socket.on('ERROR', (msg) => {
+      alert(msg);
+    });
+
+    socket.on('ROOM_CREATED', ({ roomId, room }) => {
+      currentRoom = room;
+      myPlayerIndex = 0;
+      updateLobbyUI();
+    });
+
+    socket.on('ROOM_UPDATED', (room) => {
+      currentRoom = room;
+      myPlayerIndex = room.players.findIndex(p => p.socketId === socket.id);
+      updateLobbyUI();
+    });
+
+    socket.on('GAME_STARTED', (room) => {
+      currentRoom = room;
+      document.getElementById('lobby-modal').classList.add('hidden');
+      document.getElementById('room-badge').innerText = `Sala: ${room.id}`;
+      renderGameState();
+    });
+
+    socket.on('GAME_STATE_UPDATED', (room) => {
+      currentRoom = room;
+      renderGameState();
+    });
+
+    socket.on('GAME_OVER', (room) => {
+      currentRoom = room;
+      showGameOverModal();
+    });
+
+    // --- ACCIONES DE LOBBY ---
+    function showCreateOptions() {
+      document.getElementById('create-panel').classList.remove('hidden');
+      document.getElementById('join-panel').classList.add('hidden');
+    }
+
+    function showJoinOptions() {
+      document.getElementById('join-panel').classList.remove('hidden');
+      document.getElementById('create-panel').classList.add('hidden');
+    }
+
+    function createRoom() {
+      const name = document.getElementById('player-name-input').value.trim() || 'Jugador 1';
+      const useFullDeck = document.getElementById('full-deck-checkbox').checked;
+      socket.emit('CREATE_ROOM', { playerName: name, useFullDeck });
+    }
+
+    function joinRoom() {
+      const name = document.getElementById('player-name-input').value.trim() || 'Jugador 2';
+      const code = document.getElementById('room-code-input').value.trim();
+      if (!code) return alert('Introduce un código de sala');
+      socket.emit('JOIN_ROOM', { roomId: code, playerName: name });
+    }
+
+    function startGame() {
+      if (currentRoom) {
+        socket.emit('START_GAME', { roomId: currentRoom.id });
+      }
+    }
+
+    function updateLobbyUI() {
+      if (!currentRoom) return;
+      document.getElementById('create-panel').classList.add('hidden');
+      document.getElementById('join-panel').classList.add('hidden');
+      document.getElementById('waiting-panel').classList.remove('hidden');
+      document.getElementById('display-room-code').innerText = currentRoom.id;
+
+      const isHost = currentRoom.host === socket.id;
+      const listEl = document.getElementById('connected-players-list');
+      
+      listEl.innerHTML = currentRoom.players.map(p => `
+        <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-700/60 flex justify-between items-center text-xs">
+          <span class="font-bold ${p.socketId === socket.id ? 'text-amber-400' : 'text-slate-200'}">${p.name} ${p.socketId === socket.id ? '(Tú)' : ''}</span>
+          ${currentRoom.host === p.socketId ? '<span class="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono">HOST</span>' : ''}
+        </div>
+      `).join('');
+
+      if (isHost && currentRoom.players.length >= 2) {
+        document.getElementById('start-game-btn').classList.remove('hidden');
+        document.getElementById('waiting-host-msg').classList.add('hidden');
+      } else {
+        document.getElementById('start-game-btn').classList.add('hidden');
+        document.getElementById('waiting-host-msg').classList.remove('hidden');
+      }
+    }
+
+    // --- ACCIONES DE JUEGO ---
+    function pickScoreCard(pileIdx) {
+      if (!isMyTurn()) return;
+      socket.emit('PICK_SCORE_CARD', { roomId: currentRoom.id, pileIdx });
+    }
+
+    function pickElementCard(marketIdx) {
+      if (!isMyTurn()) return;
+      socket.emit('PICK_ELEMENT_CARD', { roomId: currentRoom.id, marketIdx });
+    }
+
+    function flipScoreCard(cardIdx) {
+      if (!isMyTurn()) return;
+      socket.emit('FLIP_SCORE_CARD', { roomId: currentRoom.id, cardIdx });
+    }
+
+    function isMyTurn() {
+      return currentRoom && currentRoom.players[currentRoom.currentPlayerIndex].socketId === socket.id;
+    }
+
+    // --- CÁLCULO DE PUNTOS CLIENTE ---
+    function evaluateCardScore(card, player, allPlayers) {
+      const rule = card.rule;
+      const e = player.elements;
+
+      switch (card.type) {
+        case 'MAX_SUIT': {
+          const maxVal = Math.max(...allPlayers.map(p => p.elements[rule.suit]));
+          return (e[rule.suit] === maxVal && maxVal > 0) ? rule.pts : 0;
+        }
+        case 'MIN_SUIT': {
+          const minVal = Math.min(...allPlayers.map(p => p.elements[rule.suit]));
+          return (e[rule.suit] === minVal) ? rule.pts : 0;
+        }
+        case 'MAX_TOTAL': {
+          const totalElems = p => Object.values(p.elements).reduce((a,b)=>a+b,0);
+          const maxTotal = Math.max(...allPlayers.map(totalElems));
+          return (totalElems(player) === maxTotal && maxTotal > 0) ? rule.pts : 0;
+        }
+        case 'MIN_TOTAL': {
+          const totalElems = p => Object.values(p.elements).reduce((a,b)=>a+b,0);
+          const minTotal = Math.min(...allPlayers.map(totalElems));
+          return (totalElems(player) === minTotal) ? rule.pts : 0;
+        }
+        case 'COMBO_3': {
+          let pPts = 0, nPts = 0;
+          if(rule.pos) rule.pos.forEach(([s, val]) => pPts += (e[s] || 0) * val);
+          if(rule.neg) rule.neg.forEach(([s, val]) => nPts += (e[s] || 0) * val);
+          return (pPts - nPts);
+        }
+        case 'TRIO_SAME':
+          return Math.floor((e[rule.suit] || 0) / 3) * rule.pts;
+        case 'MULTIPLIER':
+          return (e[rule.suit] || 0) * rule.pts;
+        case 'FULL_SET':
+          return Math.min(...Object.values(e)) * rule.pts;
+        case 'TRIO_DIFF':
+          return Math.min(...rule.suits.map(s => e[s] || 0)) * rule.pts;
+        case 'DOUBLE_SIMPLE': {
+          let pts = 0;
+          rule.suits.forEach(s => pts += (e[s] || 0) * rule.pts);
+          return pts;
+        }
+        case 'PAIR_DIFF':
+          return Math.min(e[rule.suits[0]] || 0, e[rule.suits[1]] || 0) * rule.pts;
+        case 'EVEN_ODD': {
+          const cnt = e[rule.suit] || 0;
+          return (cnt % 2 === 0) ? rule.even : rule.odd;
+        }
+        case 'PAIR_SAME':
+          return Math.floor((e[rule.suit] || 0) / 2) * rule.pts;
+        case 'ABSENT_SUIT':
+          return Object.values(e).filter(v => v === 0).length * rule.pts;
+        case 'THRESHOLD_SUIT':
+          return Object.values(e).filter(v => v >= rule.count).length * rule.pts;
+      }
+      return 0;
+    }
+
+    function calculateScore(playerIdx) {
+      if (!currentRoom) return 0;
+      const player = currentRoom.players[playerIdx];
+      return player.scoreCards.reduce((acc, card) => acc + evaluateCardScore(card, player, currentRoom.players), 0);
+    }
+
+    // --- RENDERIZADO DEL TABLERO ---
+    function renderGameState() {
+      const currentPlayer = currentRoom.players[currentRoom.currentPlayerIndex];
+      const myTurn = isMyTurn();
+
+      document.getElementById('turn-indicator').innerText = currentPlayer.name;
+      const statusEl = document.getElementById('action-status');
+
+      if (myTurn) {
+        statusEl.innerText = currentRoom.selectedElementsCount === 1 ? "Coge 2ª carta de elemento" : "¡Tus opciones: 1 Puntuación o 2 Elementos!";
+        statusEl.className = "font-bold text-emerald-400 text-xs animate-pulse";
+      } else {
+        statusEl.innerText = `Esperando a ${currentPlayer.name}...`;
+        statusEl.className = "font-medium text-amber-300 text-xs";
+      }
+
+      // Render Pilas
+      document.getElementById('deck-piles').innerHTML = currentRoom.piles.map((pile, idx) => {
+        if (pile.length === 0) {
+          return `<div class="h-28 border-2 border-dashed border-slate-700 rounded-xl flex items-center justify-center text-[10px] text-slate-500 font-bold">VACÍO</div>`;
+        }
+        const topCard = pile[pile.length - 1];
+        const suitInfo = PALOS[topCard.suit];
+        return `
+          <div onclick="pickScoreCard(${idx})" class="h-28 bg-slate-800 border-2 ${myTurn ? 'border-amber-500/80 hover:border-amber-400 cursor-pointer card-flip' : 'border-slate-700 opacity-80 cursor-not-allowed'} rounded-xl p-2 flex flex-col justify-between shadow-md">
+            <div class="flex justify-between items-center text-[9px] text-amber-400 font-bold uppercase">
+              <span>Puntuación</span>
+              <span class="bg-slate-900/80 px-1 py-0.5 rounded">${pile.length}</span>
+            </div>
+            <p class="text-[11px] font-semibold text-slate-200 leading-tight">${topCard.desc}</p>
+            <div class="flex justify-between items-center text-[10px] opacity-75 font-mono">
+              <span class="bg-slate-900/60 px-1 rounded">${suitInfo.icono} ${suitInfo.id}</span>
+              <span class="bg-slate-900/60 px-1 rounded">${suitInfo.id} ${suitInfo.icono}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Render Mercado
+      document.getElementById('element-market').innerHTML = currentRoom.market.map((card, idx) => {
+        if (!card) {
+          return `<div class="h-24 border-2 border-dashed border-slate-800 rounded-xl flex items-center justify-center text-[10px] text-slate-600">Hueco Vacío</div>`;
+        }
+        const s = PALOS[card.suit];
+        return `
+          <div onclick="pickElementCard(${idx})" class="h-24 ${s.color} border-2 ${myTurn ? 'cursor-pointer card-flip' : 'opacity-80 cursor-not-allowed'} rounded-xl p-2.5 flex flex-col justify-between shadow-md">
+            <div class="flex justify-between items-start">
+              <span class="text-xl">${s.icono}</span>
+              <span class="text-[9px] bg-black/40 px-1 py-0.5 rounded font-mono uppercase">${s.id}</span>
+            </div>
+            <span class="font-bold text-xs block leading-none text-white drop-shadow">${s.nombre}</span>
+          </div>
+        `;
+      }).join('');
+
+      // Render Tabs Jugadores
+      document.getElementById('player-selector-tabs').innerHTML = currentRoom.players.map((p, idx) => `
+        <button onclick="viewingPlayerIndex = ${idx}; renderGameState();" class="text-[10px] font-bold px-2 py-0.5 rounded ${idx === viewingPlayerIndex ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300'}">
+          ${p.name.substring(0, 6)}
+        </button>
+      `).join('');
+
+      // Render Inventario
+      const viewingPlayerObj = currentRoom.players[viewingPlayerIndex] || currentRoom.players[0];
+      document.getElementById('player-inventory-title').innerText = viewingPlayerObj.name;
+      document.getElementById('player-score-display').innerText = `${calculateScore(viewingPlayerIndex)} pts`;
+
+      document.getElementById('player-elements-grid').innerHTML = Object.keys(PALOS).map(suitId => {
+        const s = PALOS[suitId];
+        const count = viewingPlayerObj.elements[suitId] || 0;
+        return `
+          <div class="bg-slate-900/60 border border-slate-700 rounded-lg p-1.5 flex flex-col items-center">
+            <span class="text-base">${s.icono}</span>
+            <span class="text-[9px] text-slate-400 font-mono">${s.id}</span>
+            <span class="font-bold text-amber-400 text-xs">${count}</span>
+          </div>
+        `;
+      }).join('');
+
+      // Render Objetivos
+      const scoresList = document.getElementById('player-scores-list');
+      const isViewingSelf = viewingPlayerObj.socketId === socket.id;
+
+      if (viewingPlayerObj.scoreCards.length === 0) {
+        scoresList.innerHTML = `<div class="text-[11px] text-slate-500 italic py-2 text-center">Sin cartas de puntuación.</div>`;
+      } else {
+        scoresList.innerHTML = viewingPlayerObj.scoreCards.map((card, idx) => `
+          <div class="bg-slate-900/80 border border-amber-500/40 rounded-lg p-2 flex justify-between items-center text-xs">
+            <div class="pr-2">
+              <span class="text-amber-300 font-medium block leading-tight text-[11px]">${card.desc}</span>
+              <span class="text-[9px] text-slate-500 font-mono uppercase">Palo: ${card.suit}</span>
+            </div>
+            ${(isViewingSelf && myTurn) ? `
+              <button onclick="flipScoreCard(${idx})" class="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 text-[9px] px-1.5 py-1 rounded font-bold transition">
+                Voltear 🔄
+              </button>
+            ` : ''}
+          </div>
+        `).join('');
+      }
+    }
+
+    // --- FIN DE PARTIDA ---
+    function showGameOverModal() {
+      const leaderboardEl = document.getElementById('final-leaderboard');
+      const detailsEl = document.getElementById('final-details-accordion');
+
+      const rankedPlayers = currentRoom.players.map((p, idx) => ({
+        ...p,
+        totalScore: calculateScore(idx)
+      })).sort((a, b) => b.totalScore - a.totalScore);
+
+      const medalEmojis = ['🥇', '🥈', '🥉'];
+
+      leaderboardEl.innerHTML = rankedPlayers.map((p, rank) => `
+        <div class="bg-slate-900/80 border ${rank === 0 ? 'border-amber-400' : 'border-slate-700'} p-3 rounded-xl flex justify-between items-center">
+          <div class="flex items-center gap-3">
+            <span class="text-xl">${medalEmojis[rank] || `#${rank+1}`}</span>
+            <div>
+              <span class="font-bold text-amber-300 block text-sm leading-none">${p.name}</span>
+              <span class="text-[10px] text-slate-400 font-mono">${Object.values(p.elements).reduce((a,b)=>a+b,0)} componentes</span>
+            </div>
+          </div>
+          <span class="text-2xl font-black text-emerald-400">${p.totalScore} pts</span>
+        </div>
+      `).join('');
+
+      detailsEl.innerHTML = rankedPlayers.map(p => {
+        const suitsSummaryHtml = Object.keys(PALOS).map(suitId => {
+          const s = PALOS[suitId];
+          const count = p.elements[suitId] || 0;
+          return `
+            <div class="bg-slate-950/60 border border-slate-800 rounded p-1 text-center flex flex-col items-center justify-center">
+              <span class="text-xs">${s.icono}</span>
+              <span class="text-[9px] text-slate-400 font-mono leading-none">${s.id}</span>
+              <span class="font-bold text-amber-400 text-xs mt-0.5">${count}</span>
+            </div>
+          `;
+        }).join('');
+
+        const cardDetailsHtml = p.scoreCards.length === 0 
+          ? `<div class="text-[10px] text-slate-500 italic py-1">Sin cartas.</div>`
+          : p.scoreCards.map(card => {
+              const pts = evaluateCardScore(card, p, currentRoom.players);
+              return `
+                <div class="flex justify-between items-center text-[11px] py-1 border-b border-slate-700/50">
+                  <span class="text-slate-300">${card.desc}</span>
+                  <span class="font-mono font-bold ${pts >= 0 ? 'text-amber-400' : 'text-rose-400'}">${pts >= 0 ? '+' : ''}${pts} pts</span>
+                </div>
+              `;
+            }).join('');
+
+        return `
+          <div class="bg-slate-900/60 border border-slate-700/80 p-3 rounded-xl space-y-2">
+            <h4 class="font-bold text-amber-400 text-xs flex justify-between border-b border-slate-700 pb-1">
+              <span>${p.name}</span>
+              <span>Total: ${p.totalScore} pts</span>
+            </h4>
+            <div>
+              <span class="text-[10px] font-semibold text-slate-400 uppercase block mb-1">Componentes Conseguidos:</span>
+              <div class="grid grid-cols-6 gap-1">${suitsSummaryHtml}</div>
+            </div>
+            <div>
+              <span class="text-[10px] font-semibold text-slate-400 uppercase block mb-1">Desglose de Puntos:</span>
+              <div class="space-y-0.5 bg-slate-950/40 p-2 rounded-lg border border-slate-800/80">${cardDetailsHtml}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('game-over-modal').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>
