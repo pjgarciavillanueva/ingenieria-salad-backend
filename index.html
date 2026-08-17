@@ -708,15 +708,30 @@
       }
     }
 
-    function showGameOverModal() {
+        function showGameOverModal() {
       const players = gameMode === 'local' ? localState.players : currentRoom.players;
       const rankedPlayers = players.map((p, idx) => ({ ...p, totalScore: calculateScore(idx) })).sort((a, b) => b.totalScore - a.totalScore);
       const medalEmojis = ['🥇', '🥈', '🥉'];
 
+      // Comprobamos si hay empate en la primera posición
+      const highestScore = rankedPlayers[0].totalScore;
+      const winners = rankedPlayers.filter(p => p.totalScore === highestScore);
+      
+      const titleEl = document.querySelector('#game-over-modal h2');
+      const subtitleEl = document.querySelector('#game-over-modal p');
+
+      if (winners.length > 1) {
+        titleEl.innerText = "¡Empate Técnico!";
+        subtitleEl.innerText = `¡Hay un empate a ${highestScore} puntos entre ${winners.map(w => w.name).join(' y ')}!`;
+      } else {
+        titleEl.innerText = "¡Partida Finalizada!";
+        subtitleEl.innerText = "Resumen General y Clasificación Final";
+      }
+
       document.getElementById('final-leaderboard').innerHTML = rankedPlayers.map((p, rank) => `
         <div class="bg-slate-900 border ${rank === 0 ? 'border-amber-400' : 'border-slate-700'} p-3 rounded-xl flex justify-between items-center">
           <div class="flex items-center gap-3">
-            <span class="text-xl">${medalEmojis[rank] || `#${rank+1}`}</span>
+            <span class="text-xl">${winners.length > 1 && p.totalScore === highestScore ? '🤝' : (medalEmojis[rank] || `#${rank+1}`)}</span>
             <div><span class="font-bold text-amber-300 text-sm">${p.name}</span></div>
           </div>
           <span class="text-2xl font-black text-emerald-400">${p.totalScore} pts</span>
@@ -734,6 +749,9 @@
 
       document.getElementById('game-over-modal').classList.remove('hidden');
     }
+
+
+      
 
     window.onload = () => { selectPlayerCount(2); };
   </script>
