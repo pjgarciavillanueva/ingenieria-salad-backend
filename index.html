@@ -475,16 +475,21 @@
       }
     }
 
-    function pickElementCard(marketIdx) {
+        function pickElementCard(marketIdx) {
       if (gameMode === 'local') {
         if (localState.hasTakenScoreCard || !localState.market[marketIdx] || localState.selectedElementsCount >= 2) return;
+        
         const card = localState.market[marketIdx];
         localState.players[localState.currentPlayer].elements[card.suit]++;
         localState.market[marketIdx] = null;
         localState.selectedElementsCount++;
         localState.pendingReplacements.push(marketIdx);
 
-        if (localState.selectedElementsCount === 2) {
+        // Comprobamos si queda alguna carta disponible en el mercado
+        const hasMoreCardsInMarket = localState.market.some(c => c !== null);
+
+        // Termina el turno si coge 2 cartas o si ya no hay más cartas que coger
+        if (localState.selectedElementsCount === 2 || !hasMoreCardsInMarket) {
           endLocalTurn();
         } else {
           renderState();
@@ -494,6 +499,7 @@
         socket.emit('PICK_ELEMENT_CARD', { roomId: currentRoom.id, marketIdx });
       }
     }
+
 
     function flipScoreCard(cardIdx) {
       if (gameMode === 'local') {
