@@ -475,7 +475,7 @@
       }
     }
 
-        function pickElementCard(marketIdx) {
+            function pickElementCard(marketIdx) {
       if (gameMode === 'local') {
         if (localState.hasTakenScoreCard || !localState.market[marketIdx] || localState.selectedElementsCount >= 2) return;
         
@@ -485,11 +485,11 @@
         localState.selectedElementsCount++;
         localState.pendingReplacements.push(marketIdx);
 
-        // Comprobamos si queda alguna carta disponible en el mercado
-        const hasMoreCardsInMarket = localState.market.some(c => c !== null);
-
-        // Termina el turno si coge 2 cartas o si ya no hay más cartas que coger
-        if (localState.selectedElementsCount === 2 || !hasMoreCardsInMarket) {
+        // Contamos cuántas cartas quedan realmente en el mercado tras coger esta
+        const remainingCardsInMarket = localState.market.filter(c => c !== null).length;
+        
+        // Si ya hemos cogido 2, O si ya no quedan cartas en el mercado para hacer una 2ª selección, terminamos el turno
+        if (localState.selectedElementsCount === 2 || remainingCardsInMarket === 0) {
           endLocalTurn();
         } else {
           renderState();
@@ -499,6 +499,7 @@
         socket.emit('PICK_ELEMENT_CARD', { roomId: currentRoom.id, marketIdx });
       }
     }
+
 
 
     function flipScoreCard(cardIdx) {
