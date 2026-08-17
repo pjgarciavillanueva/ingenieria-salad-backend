@@ -520,15 +520,21 @@
     }
 
     function endLocalTurn() {
+      // 1. Refill primero
       refillLocalMarket();
+      
+      // 2. Comprobar si realmente terminó
       const emptyPiles = localState.piles.every(p => p.length === 0);
       const emptyMarket = localState.market.every(c => c === null);
 
       if (emptyPiles && emptyMarket) {
-        showGameOverModal();
+        // Usamos setTimeout para que el motor termine de procesar el turno 
+        // antes de abrir el modal, evitando el error de lectura
+        setTimeout(() => showGameOverModal(), 100);
         return;
       }
 
+      // 3. Si no terminó, seguimos
       resetLocalTurnState();
       localState.currentPlayer = (localState.currentPlayer + 1) % localState.players.length;
       localState.viewingPlayer = localState.currentPlayer;
@@ -610,10 +616,13 @@
     function calculateScore(playerIdx) {
       if (gameMode === 'local') {
         const player = localState.players[playerIdx];
+        // Protegemos: si el jugador no existe o no tiene scoreCards, devolvemos 0
+        if (!player || !player.scoreCards) return 0; 
         return player.scoreCards.reduce((acc, c) => acc + evaluateCardScore(c, player, localState.players), 0);
       } else {
-        if (!currentRoom) return 0;
+        if (!currentRoom || !currentRoom.players[playerIdx]) return 0;
         const player = currentRoom.players[playerIdx];
+        if (!player.scoreCards) return 0;
         return player.scoreCards.reduce((acc, c) => acc + evaluateCardScore(c, player, currentRoom.players), 0);
       }
     }
