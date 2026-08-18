@@ -757,15 +757,52 @@
           <span class="text-2xl font-black text-emerald-400">${p.totalScore} pts</span>
         </div>`).join('');
 
-      document.getElementById('final-details-accordion').innerHTML = rankedPlayers.map(p => `
-        <div class="bg-slate-900/60 border border-slate-700 p-3 rounded-xl space-y-2">
-          <h4 class="font-bold text-amber-400 text-xs flex justify-between border-b border-slate-700 pb-1">
-            <span>${p.name}</span><span>Total: ${calculateScore(players.indexOf(p))} pts</span>
-          </h4>
-          <div class="grid grid-cols-6 gap-1">
-            ${Object.keys(PALOS).map(s => `<div class="bg-slate-950 p-1 text-center"><img src="${PALOS[s].img}" class="h-4 mx-auto img-outline"><span class="text-[9px] text-amber-400">${p.elements[s]||0}</span></div>`).join('')}
+      document.getElementById('final-details-accordion').innerHTML = rankedPlayers.map(p => {
+        // En lugar de buscar el índice de 'p' en el array, usamos el 'originalIdx' que ya incluimos
+        const playerOriginalIdx = p.originalIdx; 
+        
+        const suitsSummaryHtml = Object.keys(PALOS).map(suitId => {
+          const s = PALOS[suitId];
+          const count = p.elements[suitId] || 0;
+          return `
+            <div class="bg-slate-950/60 border border-slate-800 rounded p-1 text-center flex flex-col items-center justify-center">
+              <img src="${s.img}" class="h-5 w-auto object-contain img-outline mb-0.5">
+              <span class="text-[9px] text-slate-400 font-mono leading-none">${s.id}</span>
+              <span class="font-bold text-amber-400 text-xs mt-0.5">${count}</span>
+            </div>
+          `;
+        }).join('');
+
+        const cardDetailsHtml = p.scoreCards.length === 0 
+          ? `<div class="text-[10px] text-slate-500 italic py-1">Sin cartas de puntuación.</div>`
+          : p.scoreCards.map(card => {
+              // Usamos el índice correcto para calcular puntos
+              const pts = evaluateCardScore(card, p, players); 
+              return `
+                <div class="flex justify-between items-center text-[11px] py-1 border-b border-slate-700/50">
+                  <span class="text-slate-300">${card.desc}</span>
+                  <span class="font-mono font-bold ${pts >= 0 ? 'text-amber-400' : 'text-rose-400'}">${pts >= 0 ? '+' : ''}${pts} pts</span>
+                </div>
+              `;
+            }).join('');
+
+        return `
+          <div class="bg-slate-900/60 border border-slate-700/80 p-3 rounded-xl space-y-2">
+            <h4 class="font-bold text-amber-400 text-xs flex justify-between border-b border-slate-700 pb-1">
+              <span>${p.name}</span>
+              <span>Total: ${p.totalScore} pts</span>
+            </h4>
+            <div>
+              <span class="text-[10px] font-semibold text-slate-400 uppercase block mb-1">Componentes Conseguidos:</span>
+              <div class="grid grid-cols-6 gap-1">${suitsSummaryHtml}</div>
+            </div>
+            <div>
+              <span class="text-[10px] font-semibold text-slate-400 uppercase block mb-1">Desglose de Puntos:</span>
+              <div class="space-y-0.5 bg-slate-950/40 p-2 rounded-lg border border-slate-800/80">${cardDetailsHtml}</div>
+            </div>
           </div>
-        </div>`).join('');
+        `;
+      }).join('');
 
       document.getElementById('game-over-modal').classList.remove('hidden');
     }
