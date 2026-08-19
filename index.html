@@ -150,11 +150,13 @@
         </div>
       </div>
 
+            <!-- Botón Fijo en el Pie -->
       <div class="pt-3 border-t border-slate-700/80">
-        <button onclick="showSetupModal()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg transition text-base">
+        <button onclick="reiniciarPartida()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg transition text-base">
           Nueva Partida 🚀
         </button>
       </div>
+
     </div>
   </div>
 
@@ -474,6 +476,21 @@
         socket.emit('PICK_SCORE_CARD', { roomId: currentRoom.id, pileIdx });
       }
     }
+
+    function reiniciarPartida() {
+      // Ocultar modal de fin de partida
+      document.getElementById('game-over-modal').classList.add('hidden');
+      
+      // Mostrar el modal de configuración inicial
+      document.getElementById('setup-modal').classList.remove('hidden');
+      
+      // Si estabas en modo online, limpiamos la sala actual
+      if (gameMode === 'online') {
+        currentRoom = null;
+        document.getElementById('waiting-panel').classList.add('hidden');
+      }
+    }
+
 
             function pickElementCard(marketIdx) {
       if (gameMode === 'local') {
